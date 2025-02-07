@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>温度と湿度のグラフ（CanvasJS）</title>
+    <script src="https://cdn.canvasjs.com/canvasjs.min.js"></script> <!-- CanvasJSライブラリ -->
+</head>
+<body>
+
+    <div id="chartContainer" style="width: 80%; height: 500px; margin: auto;"></div>
+
+    <script>
+        // 🔹 Googleスプレッドシートの公開CSV URL（組み込み済み）
+        const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSY5A0PUveMgm9IHMFKvtNxzb_q1GhZ6pQd5ZIVCeDUUEmi6kpXmcLPrZd3s1VEez-rQzOWdopKBPIl/pub?gid=0&single=true&output=csv';
+
+        // 🔹 CSVデータを取得してグラフに表示
+        fetch(sheetUrl)
+            .then(response => response.text())
+            .then(csvData => {
+                const rows = csvData.split("\n").map(row => row.split(",")); // CSVを配列に変換
+
+                // 📌 データの整形
+                const temperatureData = [];  // 温度データ
+                const humidityData = [];  // 湿度データ
+
+                for (let i = 1; i < rows.length; i++) {  // 1行目（ヘッダー）はスキップ
+                    const row = rows[i];
+
+                    // **エラーチェック**
+                    if (row.length < 3) continue;  // 空行をスキップ
+
+                    const date = new Date(row[0]);  // 日付（Dateオブジェクトに変換）
+                    const temperature = parseFloat(row[1]) || 0;  // 温度データ（NaN対策）
+                    const humidity = parseFloat(row[2]) || 0;  // 湿度データ（NaN対策）
+
+                    temperatureData.push({ x: date, y: temperature });
+                    humidityData.push({ x: date, y: humidity });
+                }
+
+                console.log("温度データ:", temperatureData);
+                console.log("湿度データ:", humidityData);
+
+                // 🔹 CanvasJSでグラフを描画
+                const chart = new CanvasJS.Chart("chartContainer", {
+                    animationEnabled: true,  // アニメーション有効
+                    zoomEnabled: true,       // 🔹 ズーム（スライダー機能）
+                    panEnabled: true,        // 🔹 パン（ドラッグで移動）
+                    title: {
+                        text: "温度と湿度の推移"
+                    },
+                    axisX: {
+                        title: "日付",
+                        valueFormatString: "YYYY-MM-DD",  // X軸の日付フォーマット
+                        labelAngle: -50  // ラベルの傾き調整
+                    },
+                    axisY: {
+                        title: "温度 (℃) / 湿度 (%)"
+                    },
+                    data: [
+                        {
+                            type: "spline",  // 滑らかな曲線
+                            name: "温度 (℃)",
+                            showInLegend: true,
+                            markerSize: 5,
+                            color: "red",
+                            dataPoints: temperatureData
+                        },
+                        {
+                            type: "spline",
+                            name: "湿度 (%)",
+                            showInLegend: true,
+                            markerSize: 5,
+                            color: "blue",
+                            dataPoints: humidityData
+                        }
+                    ]
+                });
+
+                chart.render();  // グラフを描画
+            })
+            .catch(error => console.error("データ取得エラー:", error));
+    </script>
+
+</body>
+</html>
