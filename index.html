@@ -3,109 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>温度と湿度のグラフ（スライダー付き）</title>
-    <script src="https://cdn.canvasjs.com/canvasjs.min.js"></script> <!-- CanvasJSライブラリ -->
+    <title>温度と湿度のグラフ</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/stock.js"></script> <!-- スライダー用 -->
 </head>
 <body>
 
-    <div id="chartContainer" style="width: 80%; height: 500px; margin: auto;"></div>
-
-    <!-- 🔹 スライダー（範囲選択用） -->
-    <input type="range" id="rangeSlider" min="0" max="30" value="30" step="1" style="width: 80%; margin: 20px auto; display: block;">
+    <div id="container" style="width: 80%; height: 500px; margin: auto;"></div>
 
     <script>
-        // 🔹 Googleスプレッドシートの公開CSV URL
         const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSY5A0PUveMgm9IHMFKvtNxzb_q1GhZ6pQd5ZIVCeDUUEmi6kpXmcLPrZd3s1VEez-rQzOWdopKBPIl/pub?gid=0&single=true&output=csv';
 
-        let chart; // グラフの変数（スライダー変更時に再描画用）
-        let fullData = []; // 全データ保持用（スライダー用）
-
-        // 🔹 CSVデータを取得してグラフに表示
         fetch(sheetUrl)
             .then(response => response.text())
             .then(csvData => {
-                const rows = csvData.split("\n").map(row => row.split(",")); // CSVを配列に変換
+                const rows = csvData.trim().split("\n").map(row => row.split(","));
 
-                // 📌 データの整形
-                fullData = {
-                    temperature: [],
-                    humidity: []
-                };
+                const temperatureDataCurrent = [];
+                const temperatureDataMax = [];
+                const temperatureDataMin = [];
+                const humidityData = [];
 
-                for (let i = 1; i < rows.length; i++) {  // 1行目（ヘッダー）はスキップ
+                const hasHeader = isNaN(parseFloat(rows[0][1]));
+                const startIndex = hasHeader ? 1 : 0;
+
+                for (let i = startIndex; i < rows.length; i++) {
                     const row = rows[i];
+                    if (row.length < 3) continue;
 
-                    // **エラーチェック**
-                    if (row.length < 3) continue;  // 空行をスキップ
+                    let date = new Date(row[0]).getTime();
+                    date += 9 * 3600 * 1000; // UTC → 日本時間（JST）に変換
 
-                    const date = new Date(row[0]);  // 日付（Dateオブジェクトに変換）
-                    const temperature = parseFloat(row[1]) || 0;  // 温度データ
-                    const humidity = parseFloat(row[2]) || 0;  // 湿度データ
+                    const temp = parseFloat(row[1]);
+                    const humidity = parseFloat(row[2]);
 
-                    fullData.temperature.push({ x: date, y: temperature });
-                    fullData.humidity.push({ x: date, y: humidity });
+                    if (!isNaN(date) && !isNaN(temp)) {
+                        temperatureDataCurrent.push([date, temp]);
+                        // 最大値と最小値の更新
+                        const lastMax = temperatureDataMax.length ? temperatureDataMax[temperatureDataMax.length - 1][1] : temp;
+                        const lastMin = temperatureDataMin.length ? temperatureDataMin[temperatureDataMin.length - 1][1] : temp;
+                        temperatureDataMax.push([date, Math.max(lastMax, temp)]);
+                        temperatureDataMin.push([date, Math.min(lastMin, temp)]);
+                    }
+                    if (!isNaN(date) && !isNaN(humidity)) {
+                        humidityData.push([date, humidity]);
+                    }
                 }
 
-                console.log("温度データ:", fullData.temperature);
-                console.log("湿度データ:", fullData.humidity);
+                temperatureDataCurrent.sort((a, b) => a[0] - b[0]);
+                temperatureDataMax.sort((a, b) => a[0] - b[0]);
+                temperatureDataMin.sort((a, b) => a[0] - b[0]);
+                humidityData.sort((a, b) => a[0] - b[0]);
 
-                // 🔹 スライダーの最大値をデータ数に合わせる
-                document.getElementById("rangeSlider").max = fullData.temperature.length;
-                document.getElementById("rangeSlider").value = fullData.temperature.length;
+                const latestTemp = temperatureDataCurrent.length > 0 ? temperatureDataCurrent[temperatureDataCurrent.length - 1][1].toFixed(1) : "--";
+                const latestHumidity = humidityData.length > 0 ? humidityData[humidityData.length - 1][1].toFixed(1) : "--";
 
-                drawChart(fullData.temperature.length); // 初回表示
-            })
-            .catch(error => console.error("データ取得エラー:", error));
-
-        // 🔹 グラフを描画する関数（スライダーで更新）
-        function drawChart(range) {
-            const temperatureData = fullData.temperature.slice(-range);
-            const humidityData = fullData.humidity.slice(-range);
-
-            chart = new CanvasJS.Chart("chartContainer", {
-                animationEnabled: true,  // アニメーション有効
-                zoomEnabled: true,       // 🔹 ズーム（スライダー機能）
-                panEnabled: true,        // 🔹 パン（ドラッグで移動）
-                title: {
-                    text: "温度と湿度の推移"
-                },
-                axisX: {
-                    title: "日付",
-                    valueFormatString: "YYYY-MM-DD",
-                    labelAngle: -50
-                },
-                axisY: {
-                    title: "温度 (℃) / 湿度 (%)"
-                },
-                data: [
-                    {
-                        type: "spline",
-                        name: "温度 (℃)",
-                        showInLegend: true,
-                        markerSize: 5,
-                        color: "red",
-                        dataPoints: temperatureData
+                const chart = Highcharts.stockChart('container', {
+                    chart: {
+                        type: 'spline',
+                        zoomType: '',
+                        panning: true,
+                        panKey: 'shift',
+                        zooming: {
+                            mouseWheel: {
+                                enabled: true
+                            }
+                        },
+                        events: {
+                            load: function () {
+                                const chart = this;
+                                updateLatestText(chart); // 初回描画時に表示
+                                setInterval(() => updateLatestText(chart), 60000); // 1分ごとに時間更新
+                            },
+                            redraw: function () {
+                                updateLatestText(this); // リサイズ時に再配置
+                            }
+                        }
                     },
-                    {
-                        type: "spline",
-                        name: "湿度 (%)",
-                        showInLegend: true,
-                        markerSize: 5,
-                        color: "blue",
-                        dataPoints: humidityData
+                    title: {
+                        text: '温度と湿度の推移'
+                    },
+                    xAxis: {
+                        type: 'datetime',
+                        title: { text: '日時' },
+                        tickInterval: 3600 * 1000,
+                        labels: {
+                            formatter: function () {
+                                const date = new Date(this.value);
+                                const year = date.getFullYear();
+                                const month = date.getMonth() + 1;
+                                const day = date.getDate();
+                                const hour = date.getHours();
+
+                                if (this.axis.previousYear !== year) {
+                                    this.axis.previousYear = year;
+                                    return `${year}/${month}/${day} ${hour}:00`;
+                                }
+                                return `${month}/${day} ${hour}:00`;
+                            }
+                        }
+                    },
+                    yAxis: {
+                        title: { text: '値' }
+                    },
+                    navigator: {
+                        enabled: true
+                    },
+                    rangeSelector: {
+                        enabled: true,
+                        selected: 1,
+                        buttons: [
+                            { type: 'hour', count: 6, text: '6時間' },
+                            { type: 'day', count: 1, text: '1日' },
+                            { type: 'week', count: 1, text: '1週間' },
+                            { type: 'month', count: 1, text: '1ヶ月' },
+                            { type: 'month', count: 3, text: '3ヶ月' },
+                            { type: 'year', count: 1, text: '1年' },
+                            { type: 'all', text: 'すべて' }
+                        ]
+                    },
+                    series: [
+                        {
+                            name: '現在の温度 (℃)',
+                            data: temperatureDataCurrent,
+                            color: 'red',
+                            turboThreshold: 0
+                        },
+                        {
+                            name: '最高温度 (℃)',
+                            data: temperatureDataMax,
+                            color: 'orange',
+                            turboThreshold: 0
+                        },
+                        {
+                            name: '最低温度 (℃)',
+                            data: temperatureDataMin,
+                            color: 'blue',
+                            turboThreshold: 0
+                        },
+                        {
+                            name: '湿度 (%)',
+                            data: humidityData,
+                            color: 'green',
+                            turboThreshold: 0
+                        }
+                    ]
+                });
+
+                function updateLatestText(chart) {
+                    if (!chart) return;
+
+                    if (chart.latestText) {
+                        chart.latestText.destroy(); // 既存のテキストを削除
                     }
-                ]
+
+                    const now = new Date();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const timeString = `${hours}:${minutes}`; // HH:mm 形式
+
+                    chart.latestText = chart.renderer.text(
+                        `<b>${timeString}</b><br><span style="color:blue">${latestHumidity} %</span><br><span style="color:red">${latestTemp} ℃</span>`,
+                        chart.chartWidth - 120,  // 右端から 200px
+                        chart.plotTop + 20       // グラフ上端 + 20px
+                    )
+                    .css({
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        background: 'rgba(255, 255, 255, 0.7)',
+                        padding: '5px'
+                    })
+                    .add();
+                }
+            })
+            .catch(error => {
+                console.error("データ取得エラー:", error);
+                document.getElementById('container').innerHTML = "<p style='color: red; text-align: center;'>データの取得に失敗しました。</p>";
             });
-
-            chart.render();  // グラフを描画
-        }
-
-        // 🔹 スライダーの変更イベント
-        document.getElementById("rangeSlider").addEventListener("input", function() {
-            const range = parseInt(this.value);
-            drawChart(range);
-        });
-
     </script>
 
 </body>
