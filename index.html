@@ -9,7 +9,9 @@
 </head>
 <body>
 
-    <div id="container" style="width: 80%; height: 500px; margin: auto;"></div>
+    <div id="container1" style="width: 80%; height: 500px; margin: auto; margin-bottom: 50px;"></div>
+    <div id="container2" style="width: 80%; height: 500px; margin: auto; margin-bottom: 50px;"></div>
+    <div id="container3" style="width: 80%; height: 500px; margin: auto;"></div>
 
     <script>
         const sheetUrls = [
@@ -18,16 +20,20 @@
             'https://docs.google.com/spreadsheets/d/e/2PACX-1vRA6HQ7BURi4AveOdA_xVUMmpbeRROmQMdPHNeh6MJkWQVqom79crNyyL5XFXxzrKbkavHon1b5Ppp6/pub?gid=2047656442&single=true&output=csv'
         ];
 
-        let temperatureData = [];
-        let humidityData = [];
+        let temperatureData1 = [], humidityData1 = [];
+        let temperatureData2 = [], humidityData2 = [];
+        let temperatureData3 = [], humidityData3 = [];
 
         Promise.all(sheetUrls.map(url => fetch(url).then(response => response.text())))
             .then(csvResponses => {
-                csvResponses.forEach(csvData => {
+                csvResponses.forEach((csvData, index) => {
                     const rows = csvData.trim().split("\n").map(row => row.split(","));
 
                     const hasHeader = isNaN(parseFloat(rows[0][1]));
                     const startIndex = hasHeader ? 1 : 0;
+
+                    let temperatureData = [];
+                    let humidityData = [];
 
                     for (let i = startIndex; i < rows.length; i++) {
                         const row = rows[i];
@@ -46,124 +52,102 @@
                             humidityData.push([date, humidity]);
                         }
                     }
-                });
 
-                temperatureData.sort((a, b) => a[0] - b[0]);
-                humidityData.sort((a, b) => a[0] - b[0]);
-
-                const latestTemp = temperatureData.length > 0 ? temperatureData[temperatureData.length - 1][1].toFixed(1) : "--";
-                const latestHumidity = humidityData.length > 0 ? humidityData[humidityData.length - 1][1].toFixed(1) : "--";
-
-                const chart = Highcharts.stockChart('container', {
-                    chart: {
-                        type: 'spline',
-                        zoomType: '',
-                        panning: true,
-                        panKey: 'shift',
-                        zooming: {
-                            mouseWheel: {
-                                enabled: true
-                            }
-                        },
-                        events: {
-                            load: function () {
-                                const chart = this;
-                                updateLatestText(chart); // 初回描画時に表示
-                                setInterval(() => updateLatestText(chart), 60000); // 1分ごとに時間更新
-                            },
-                            redraw: function () {
-                                updateLatestText(this); // リサイズ時に再配置
-                            }
-                        }
-                    },
-                    title: {
-                        text: '温度と湿度の推移'
-                    },
-                    xAxis: {
-                        type: 'datetime',
-                        title: { text: '日時' },
-                        tickInterval: 3600 * 1000,
-                        labels: {
-                            formatter: function () {
-                                const date = new Date(this.value);
-                                const year = date.getFullYear();
-                                const month = date.getMonth() + 1;
-                                const day = date.getDate();
-                                const hour = date.getHours();
-
-                                if (this.axis.previousYear !== year) {
-                                    this.axis.previousYear = year;
-                                    return `${year}/${month}/${day} ${hour}:00`;
-                                }
-                                return `${month}/${day} ${hour}:00`;
-                            }
-                        }
-                    },
-                    yAxis: {
-                        title: { text: '値' }
-                    },
-                    navigator: {
-                        enabled: true
-                    },
-                    rangeSelector: {
-                        enabled: true,
-                        selected: 1,
-                        buttons: [
-                            { type: 'hour', count: 6, text: '6時間' },
-                            { type: 'day', count: 1, text: '1日' },
-                            { type: 'week', count: 1, text: '1週間' },
-                            { type: 'month', count: 1, text: '1ヶ月' },
-                            { type: 'month', count: 3, text: '3ヶ月' },
-                            { type: 'year', count: 1, text: '1年' },
-                            { type: 'all', text: 'すべて' }
-                        ]
-                    },
-                    series: [
-                        {
-                            name: '温度 (℃)',
-                            data: temperatureData,
-                            color: 'red',
-                            turboThreshold: 0
-                        },
-                        {
-                            name: '湿度 (%)',
-                            data: humidityData,
-                            color: 'blue',
-                            turboThreshold: 0
-                        }
-                    ]
-                });
-
-                function updateLatestText(chart) {
-                    if (!chart) return;
-
-                    if (chart.latestText) {
-                        chart.latestText.destroy(); // 既存のテキストを削除
+                    if (index === 0) {
+                        temperatureData1 = temperatureData;
+                        humidityData1 = humidityData;
+                    } else if (index === 1) {
+                        temperatureData2 = temperatureData;
+                        humidityData2 = humidityData;
+                    } else if (index === 2) {
+                        temperatureData3 = temperatureData;
+                        humidityData3 = humidityData;
                     }
 
-                    const now = new Date();
-                    const hours = String(now.getHours()).padStart(2, '0');
-                    const minutes = String(now.getMinutes()).padStart(2, '0');
-                    const timeString = `${hours}:${minutes}`; // HH:mm 形式
-
-                    chart.latestText = chart.renderer.text(
-                        `<b>${timeString}</b><br><span style="color:blue">${latestHumidity} %</span><br><span style="color:red">${latestTemp} ℃</span>`,
-                        chart.chartWidth - 120,  // 右端から 200px
-                        chart.plotTop + 20       // グラフ上端 + 20px
-                    )
-                    .css({
-                        fontSize: '16px',
-                        fontWeight: 'bold',
-                        background: 'rgba(255, 255, 255, 0.7)',
-                        padding: '5px'
-                    })
-                    .add();
-                }
+                    // すべてのグラフを描画
+                    if (index === 2) {
+                        createChart('container1', '温度と湿度 (グラフ1)', temperatureData1, humidityData1);
+                        createChart('container2', '温度と湿度 (グラフ2)', temperatureData2, humidityData2);
+                        createChart('container3', '温度と湿度 (グラフ3)', temperatureData3, humidityData3);
+                    }
+                });
             })
             .catch(error => {
                 console.error("データ取得エラー:", error);
-                document.getElementById('container').innerHTML = "<p style='color: red; text-align: center;'>データの取得に失敗しました。</p>";
+                document.getElementById('container1').innerHTML = "<p style='color: red; text-align: center;'>データの取得に失敗しました。</p>";
             });
+
+        function createChart(containerId, title, temperatureData, humidityData) {
+            Highcharts.stockChart(containerId, {
+                chart: {
+                    type: 'spline',
+                    zoomType: '',
+                    panning: true,
+                    panKey: 'shift',
+                    zooming: {
+                        mouseWheel: {
+                            enabled: true
+                        }
+                    }
+                },
+                title: {
+                    text: title
+                },
+                xAxis: {
+                    type: 'datetime',
+                    title: { text: '日時' },
+                    tickInterval: 3600 * 1000,
+                    labels: {
+                        formatter: function () {
+                            const date = new Date(this.value);
+                            const year = date.getFullYear();
+                            const month = date.getMonth() + 1;
+                            const day = date.getDate();
+                            const hour = date.getHours();
+
+                            if (this.axis.previousYear !== year) {
+                                this.axis.previousYear = year;
+                                return `${year}/${month}/${day} ${hour}:00`;
+                            }
+                            return `${month}/${day} ${hour}:00`;
+                        }
+                    }
+                },
+                yAxis: {
+                    title: { text: '値' }
+                },
+                navigator: {
+                    enabled: true
+                },
+                rangeSelector: {
+                    enabled: true,
+                    selected: 1,
+                    buttons: [
+                        { type: 'hour', count: 6, text: '6時間' },
+                        { type: 'day', count: 1, text: '1日' },
+                        { type: 'week', count: 1, text: '1週間' },
+                        { type: 'month', count: 1, text: '1ヶ月' },
+                        { type: 'month', count: 3, text: '3ヶ月' },
+                        { type: 'year', count: 1, text: '1年' },
+                        { type: 'all', text: 'すべて' }
+                    ]
+                },
+                series: [
+                    {
+                        name: '温度 (℃)',
+                        data: temperatureData,
+                        color: 'red',
+                        turboThreshold: 0
+                    },
+                    {
+                        name: '湿度 (%)',
+                        data: humidityData,
+                        color: 'blue',
+                        turboThreshold: 0
+                    }
+                ]
+            });
+        }
     </script>
 
 </body>
