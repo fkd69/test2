@@ -5,10 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>温度と湿度のグラフ</title>
     <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/modules/stock.js"></script> <!-- スライダー用 -->
+    <script src="https://code.highcharts.com/modules/stock.js"></script>
 </head>
 <body>
 
+    <!-- 温度・湿度選択用のチェックボックス -->
+    <div style="text-align: center; margin-bottom: 20px;">
+        <label><input type="checkbox" id="toggleTemperature" checked> 温度</label>
+        <label><input type="checkbox" id="toggleHumidity" checked> 湿度</label>
+    </div>
+
+    <!-- 各データのグラフ表示エリア -->
     <div id="container1" style="width: 80%; height: 500px; margin: auto; margin-bottom: 50px;"></div>
     <div id="container2" style="width: 80%; height: 500px; margin: auto; margin-bottom: 50px;"></div>
     <div id="container3" style="width: 80%; height: 500px; margin: auto;"></div>
@@ -20,15 +27,12 @@
             'https://docs.google.com/spreadsheets/d/e/2PACX-1vRA6HQ7BURi4AveOdA_xVUMmpbeRROmQMdPHNeh6MJkWQVqom79crNyyL5XFXxzrKbkavHon1b5Ppp6/pub?gid=2047656442&single=true&output=csv'
         ];
 
-        let temperatureData1 = [], humidityData1 = [];
-        let temperatureData2 = [], humidityData2 = [];
-        let temperatureData3 = [], humidityData3 = [];
+        let charts = [];
 
         Promise.all(sheetUrls.map(url => fetch(url).then(response => response.text())))
             .then(csvResponses => {
                 csvResponses.forEach((csvData, index) => {
                     const rows = csvData.trim().split("\n").map(row => row.split(","));
-
                     const hasHeader = isNaN(parseFloat(rows[0][1]));
                     const startIndex = hasHeader ? 1 : 0;
 
@@ -53,24 +57,15 @@
                         }
                     }
 
-                    if (index === 0) {
-                        temperatureData1 = temperatureData;
-                        humidityData1 = humidityData;
-                    } else if (index === 1) {
-                        temperatureData2 = temperatureData;
-                        humidityData2 = humidityData;
-                    } else if (index === 2) {
-                        temperatureData3 = temperatureData;
-                        humidityData3 = humidityData;
-                    }
+                    let containerId = index === 0 ? 'container1' : index === 1 ? 'container2' : 'container3';
+                    let title = index === 0 ? '部屋' : index === 1 ? '焼津' : '板橋';
 
-                    // すべてのグラフを描画
-                    if (index === 2) {
-                        createChart('container1', '部屋', temperatureData1, humidityData1);
-                        createChart('container2', '焼津', temperatureData2, humidityData2);
-                        createChart('container3', '板橋', temperatureData3, humidityData3);
-                    }
+                    charts.push(createChart(containerId, title, temperatureData, humidityData));
                 });
+
+                // チェックボックスのイベントリスナーを設定
+                document.getElementById('toggleTemperature').addEventListener('change', updateSeriesVisibility);
+                document.getElementById('toggleHumidity').addEventListener('change', updateSeriesVisibility);
             })
             .catch(error => {
                 console.error("データ取得エラー:", error);
@@ -78,21 +73,12 @@
             });
 
         function createChart(containerId, title, temperatureData, humidityData) {
-            Highcharts.stockChart(containerId, {
+            return Highcharts.stockChart(containerId, {
                 chart: {
                     type: 'spline',
-                    zoomType: '',
-                    panning: true,
-                    panKey: 'shift',
-                    zooming: {
-                        mouseWheel: {
-                            enabled: true
-                        }
-                    }
+                    zooming: { mouseWheel: { enabled: true } }
                 },
-                title: {
-                    text: title
-                },
+                title: { text: title },
                 xAxis: {
                     type: 'datetime',
                     title: { text: '日時' },
@@ -100,25 +86,12 @@
                     labels: {
                         formatter: function () {
                             const date = new Date(this.value);
-                            const year = date.getFullYear();
-                            const month = date.getMonth() + 1;
-                            const day = date.getDate();
-                            const hour = date.getHours();
-
-                            if (this.axis.previousYear !== year) {
-                                this.axis.previousYear = year;
-                                return `${year}/${month}/${day} ${hour}:00`;
-                            }
-                            return `${month}/${day} ${hour}:00`;
+                            return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:00`;
                         }
                     }
                 },
-                yAxis: {
-                    title: { text: '値' }
-                },
-                navigator: {
-                    enabled: true
-                },
+                yAxis: { title: { text: '値' } },
+                navigator: { enabled: true },
                 rangeSelector: {
                     enabled: true,
                     selected: 1,
@@ -127,7 +100,6 @@
                         { type: 'day', count: 1, text: '1日' },
                         { type: 'week', count: 1, text: '1週間' },
                         { type: 'month', count: 1, text: '1ヶ月' },
-                        { type: 'month', count: 3, text: '3ヶ月' },
                         { type: 'year', count: 1, text: '1年' },
                         { type: 'all', text: 'すべて' }
                     ]
@@ -137,15 +109,30 @@
                         name: '温度 (℃)',
                         data: temperatureData,
                         color: 'red',
-                        turboThreshold: 0
+                        turboThreshold: 0,
+                        visible: true // 初期状態で表示
                     },
                     {
                         name: '湿度 (%)',
                         data: humidityData,
                         color: 'blue',
-                        turboThreshold: 0
+                        turboThreshold: 0,
+                        visible: true // 初期状態で表示
                     }
                 ]
+            });
+        }
+
+        function updateSeriesVisibility() {
+            const showTemperature = document.getElementById('toggleTemperature').checked;
+            const showHumidity = document.getElementById('toggleHumidity').checked;
+
+            charts.forEach(chart => {
+                if (chart.series.length > 1) {
+                    chart.series[0].setVisible(showTemperature, false);
+                    chart.series[1].setVisible(showHumidity, false);
+                }
+                chart.redraw();
             });
         }
     </script>
