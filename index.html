@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>温度と湿度のグラフ</title>
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/modules/stock.js"></script>
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
 </head>
 <body>
 
@@ -13,136 +12,129 @@
     <label><input type="checkbox" id="toggleHumidity" checked> 湿度</label>
 </div>
 
-<!-- グラフコンテナを動的に追加 -->
 <div id="charts"></div>
 
 <script>
-    const sheetConfigs = [
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSY5A0PUveMgm9IHMFKvtNxzb_q1GhZ6pQd5ZIVCeDUUEmi6kpXmcLPrZd3s1VEez-rQzOWdopKBPIl/pub?gid=0&single=true&output=csv',
-            title: '部屋'
-        },
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTUP_uJeJ6ZAu8jj6-rSLPKl6WBwg-s-kxUemosIsQv2IV4TFFjOLv64Wyg0c6FuO0SCnDyBSQhDqvU/pub?gid=0&single=true&output=csv',
-            title: '焼津'
-        },
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRA6HQ7BURi4AveOdA_xVUMmpbeRROmQMdPHNeh6MJkWQVqom79crNyyL5XFXxzrKbkavHon1b5Ppp6/pub?gid=2047656442&single=true&output=csv',
-            title: '板橋'
-        },
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGMNf2MdzOeQJnl5EsXLLZOQYlGKKr7latYSRZtiuD5Na-vgd1b5AKhwyYBFFh6kwniptJvg70aSUf/pub?gid=0&single=true&output=csv
-',
-            title: '旭'
-        },
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQbwQM8kZwpUiANkY4funVGUgVh_IKRZzxC4bCpegwVgS1zXohsiJOujRsEZwS7pbYa0BiW5VDxEygu/pub?gid=0&single=true&output=csv
-',
-            title: '鹿嶋'
-        },
-        {
-            url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRyzPccP4ZgsqRd0UXf8pT452XSufIHWCIM29QF3kOaeUY3-MspNalg8ONqsLPA7rCav_pwMNr_MQNK/pub?gid=0&single=true&output=csv
-',
-            title: '鉾田'
+const sheetConfigs = [
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSY5A0PUveMgm9IHMFKvtNxzb_q1GhZ6pQd5ZIVCeDUUEmi6kpXmcLPrZd3s1VEez-rQzOWdopKBPIl/pub?gid=0&single=true&output=csv',
+        title: '部屋'
+    },
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTUP_uJeJ6ZAu8jj6-rSLPKl6WBwg-s-kxUemosIsQv2IV4TFFjOLv64Wyg0c6FuO0SCnDyBSQhDqvU/pub?gid=0&single=true&output=csv',
+        title: '焼津'
+    },
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRA6HQ7BURi4AveOdA_xVUMmpbeRROmQMdPHNeh6MJkWQVqom79crNyyL5XFXxzrKbkavHon1b5Ppp6/pub?gid=2047656442&single=true&output=csv',
+        title: '板橋'
+    },
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGMNf2MdzOeQJnl5EsXLLZOQYlGKKr7latYSRZtiuD5Na-vgd1b5AKhwyYBFFh6kwniptJvg70aSUf/pub?gid=0&single=true&output=csv',
+        title: '旭'
+    },
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQbwQM8kZwpUiANkY4funVGUgVh_IKRZzxC4bCpegwVgS1zXohsiJOujRsEZwS7pbYa0BiW5VDxEygu/pub?gid=0&single=true&output=csv',
+        title: '鹿嶋'
+    },
+    {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRyzPccP4ZgsqRd0UXf8pT452XSufIHWCIM29QF3kOaeUY3-MspNalg8ONqsLPA7rCav_pwMNr_MQNK/pub?gid=0&single=true&output=csv',
+        title: '鉾田'
+    }
+];
+
+let charts = [];
+
+Promise.all(sheetConfigs.map(config =>
+    fetch(config.url.trim()).then(res => res.text())
+)).then(csvDataList => {
+    csvDataList.forEach((csv, index) => {
+        const rows = csv.trim().split('\n').map(r => r.split(','));
+        const hasHeader = isNaN(parseFloat(rows[0][1]));
+        const startIndex = hasHeader ? 1 : 0;
+
+        const tempData = [], humData = [];
+
+        for (let i = startIndex; i < rows.length; i++) {
+            const [timeStr, tempStr, humStr] = rows[i];
+            const timestamp = new Date(timeStr).getTime();
+            const temp = parseFloat(tempStr);
+            const hum = parseFloat(humStr);
+
+            if (!isNaN(timestamp)) {
+                if (!isNaN(temp)) tempData.push([timestamp, temp]);
+                if (!isNaN(hum)) humData.push([timestamp, hum]);
+            }
         }
-    ];
 
-    let charts = [];
+        const containerId = `container${index}`;
+        const container = document.createElement('div');
+        container.id = containerId;
+        container.style.width = '80%';
+        container.style.height = '500px';
+        container.style.margin = '50px auto';
+        document.getElementById('charts').appendChild(container);
 
-    Promise.all(sheetConfigs.map(config => fetch(config.url).then(r => r.text())))
-        .then(csvDataList => {
-            csvDataList.forEach((csv, index) => {
-                const rows = csv.trim().split('\n').map(r => r.split(','));
-                const hasHeader = isNaN(parseFloat(rows[0][1]));
-                const startIndex = hasHeader ? 1 : 0;
+        charts.push(createChart(containerId, sheetConfigs[index].title, tempData, humData));
+    });
 
-                let tempData = [], humData = [];
+    document.getElementById('toggleTemperature').addEventListener('change', updateSeriesVisibility);
+    document.getElementById('toggleHumidity').addEventListener('change', updateSeriesVisibility);
+}).catch(error => {
+    console.error('データ取得エラー:', error);
+    document.getElementById('charts').innerHTML = "<p style='color:red;text-align:center;'>データの取得に失敗しました。</p>";
+});
 
-                for (let i = startIndex; i < rows.length; i++) {
-                    const [timeStr, tempStr, humStr] = rows[i];
-                    const time = new Date(timeStr).getTime() + 9 * 3600 * 1000;
-                    const temp = parseFloat(tempStr);
-                    const hum = parseFloat(humStr);
-
-                    if (!isNaN(time)) {
-                        if (!isNaN(temp)) tempData.push([time, temp]);
-                        if (!isNaN(hum)) humData.push([time, hum]);
-                    }
-                }
-
-                const containerId = `container${index}`;
-                const container = document.createElement('div');
-                container.id = containerId;
-                container.style.width = '80%';
-                container.style.height = '500px';
-                container.style.margin = '50px auto';
-                document.getElementById('charts').appendChild(container);
-
-                charts.push(createChart(containerId, sheetConfigs[index].title, tempData, humData));
-            });
-
-            document.getElementById('toggleTemperature').addEventListener('change', updateSeriesVisibility);
-            document.getElementById('toggleHumidity').addEventListener('change', updateSeriesVisibility);
-        })
-        .catch(error => {
-            console.error('取得失敗:', error);
-            document.getElementById('charts').innerHTML = "<p style='color:red;text-align:center;'>データの取得に失敗しました。</p>";
-        });
-
-    function createChart(containerId, title, temperatureData, humidityData) {
-        return Highcharts.stockChart(containerId, {
-            chart: { type: 'spline', zooming: { mouseWheel: { enabled: true } } },
-            title: { text: title },
-            xAxis: {
-                type: 'datetime',
-                title: { text: '日時' },
-                tickInterval: 3600 * 1000,
-                labels: {
-                    formatter: function () {
-                        const d = new Date(this.value);
-                        return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:00`;
-                    }
-                }
-            },
-            yAxis: { title: { text: '値' } },
-            navigator: { enabled: true },
-            rangeSelector: {
-                selected: 1,
-                buttons: [
-                    { type: 'hour', count: 6, text: '6時間' },
-                    { type: 'day', count: 1, text: '1日' },
-                    { type: 'week', count: 1, text: '1週間' },
-                    { type: 'month', count: 1, text: '1ヶ月' },
-                    { type: 'year', count: 1, text: '1年' },
-                    { type: 'all', text: 'すべて' }
-                ]
-            },
-            series: [
-                {
-                    name: '温度 (℃)',
-                    data: temperatureData,
-                    color: 'red',
-                    visible: true
-                },
-                {
-                    name: '湿度 (%)',
-                    data: humidityData,
-                    color: 'blue',
-                    visible: true
-                }
+function createChart(containerId, title, temperatureData, humidityData) {
+    return Highcharts.stockChart(containerId, {
+        chart: { type: 'spline' },
+        title: { text: title },
+        xAxis: {
+            type: 'datetime',
+            title: { text: '日時' },
+            labels: {
+                format: '{value:%m/%d %H:%M}'
+            }
+        },
+        yAxis: { title: { text: '値' } },
+        navigator: { enabled: true },
+        rangeSelector: {
+            selected: 1,
+            buttons: [
+                { type: 'hour', count: 6, text: '6時間' },
+                { type: 'day', count: 1, text: '1日' },
+                { type: 'week', count: 1, text: '1週間' },
+                { type: 'month', count: 1, text: '1ヶ月' },
+                { type: 'year', count: 1, text: '1年' },
+                { type: 'all', text: 'すべて' }
             ]
-        });
-    }
+        },
+        series: [
+            {
+                name: '温度 (℃)',
+                data: temperatureData,
+                color: 'red',
+                visible: true
+            },
+            {
+                name: '湿度 (%)',
+                data: humidityData,
+                color: 'blue',
+                visible: true
+            }
+        ]
+    });
+}
 
-    function updateSeriesVisibility() {
-        const temp = document.getElementById('toggleTemperature').checked;
-        const hum = document.getElementById('toggleHumidity').checked;
-        charts.forEach(chart => {
-            chart.series[0].setVisible(temp, false);
-            chart.series[1].setVisible(hum, false);
-            chart.redraw();
-        });
-    }
+function updateSeriesVisibility() {
+    const showTemp = document.getElementById('toggleTemperature').checked;
+    const showHum = document.getElementById('toggleHumidity').checked;
+
+    charts.forEach(chart => {
+        chart.series[0].setVisible(showTemp, false);
+        chart.series[1].setVisible(showHum, false);
+        chart.redraw();
+    });
+}
 </script>
 
 </body>
